@@ -3,7 +3,7 @@
 
 /*
  * This example sets up the CPU to service local interrupts using
- * the CLINT mode of operation. SiFive GPIO's are configured as inputs
+ * the CLIC mode of operation. SiFive GPIO's are configured as inputs
  * to support a hardware platform like the Arty 100T with buttons
  * that are connected to the local interrupt lines.
  */
@@ -26,16 +26,15 @@
  * timer interrupt using Interrupt ID #7, and buttons on the
  * Arty 100T platform, which are typically in the #16-31 range.
  *
- * This example uses the CLINT vectored mode of operation, which
- * uses a vector table and is lower latency than CLINT direct mode,
+ * This example uses the CLIC vectored mode of operation, which
+ * uses a vector table and is lower latency than CLIC direct mode,
  * due to the software overhead.
  *
- * CLINT direct mode does not use a vector table, so all
+ * CLIC direct mode does not use a vector table, so all
  * interrupts and exceptions trap to mtvec.base address and software
  * is responsible for dispatching interrupts based on the contents
- * in the mcause CSR.  CLINT direct mode of operation is not supported
- * in this example.  In CLINT direct mode (mtvec.mode = 0), all interrupts
- * and exceptions would trap to address in mtvec.base.
+ * in the mcause CSR.  CLIC direct mode of operation is not supported
+ * in this example.  
  */
 
 #define DISABLE                 0
