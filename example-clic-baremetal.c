@@ -183,10 +183,15 @@ int main() {
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_SOFTWARE), clicintcfg);
     SOFTWARE_INT_ENABLE;
 
-    /* If you want no use the cpu timer interrupt, please comment out it */
+    /* timer interrupt example */
+#if ACTIVATE_TIMER_INTERRUPT
     __mtvt_clic_vector_table[INT_ID_TIMER] = (uintptr_t)&timer_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_TIMER), clicintcfg);
+
+    /* you need to set the timer before enable irq*/
+    SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
     TIMER_INT_ENABLE;
+#endif
 
     /* If you want no use the external interrupt, please comment out it */
     __mtvt_clic_vector_table[INT_ID_EXTERNAL] = (uintptr_t)&external_handler;
@@ -210,10 +215,6 @@ int main() {
     __mtvt_clic_vector_table[i] = (uintptr_t)&lc0_handler;
 
 #endif
-
-    /* If you want to set the interval of timer interrupt, please uncomment it */
-    /* setup next timer interrupt interval */
-    //SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
 
     /* Write mstatus.mie = 1 to enable all machine interrupts */
     interrupt_global_enable();
@@ -252,11 +253,11 @@ void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handle
 
 /* Timer Interrupt ID #7 */
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (void) {
-    /* Just Do Something when the timer is expired*/
 
-	/* If you want to set the interval of timer interrupt, please uncomment it */
-	/* set our next interval */
-	//SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
+    /* Disable timer interrupt or Set next timer*/
+    TIMER_INT_DISABLE;
+
+    /* Just Do Something when the timer is expired */
 }
 
 /* local irq0 */
