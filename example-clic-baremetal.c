@@ -82,7 +82,7 @@
 #define INT_ID_TIMER                                    7
 #define INT_ID_EXTERNAL                                 11
 #define MAX_LOCAL_INTS                                  16  /* local interrupts, not local external interrupts */
-#define CLIC_VECTOR_TABLE_SIZE_MAX                      1024
+#define CLIC_VECTOR_TABLE_SIZE_MAX                      METAL_SIFIVE_CLIC0_2000000_SIFIVE_NUMINTS
 #define SOFTWARE_INT_ENABLE                             write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), ENABLE);
 #define SOFTWARE_INT_DISABLE                            write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), DISABLE);
 #define TIMER_INT_ENABLE                                write_byte(HART0_CLICINTIE_ADDR(INT_ID_TIMER), ENABLE);
