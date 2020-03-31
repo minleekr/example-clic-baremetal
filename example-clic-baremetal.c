@@ -81,6 +81,7 @@
 #define INT_ID_SOFTWARE                                 3
 #define INT_ID_TIMER                                    7
 #define INT_ID_EXTERNAL                                 11
+#define INT_ID_CLIC_SOFTWARE                            12
 #define MAX_LOCAL_INTS                                  16  /* local interrupts, not local external interrupts */
 #define CLIC_VECTOR_TABLE_SIZE_MAX                      METAL_SIFIVE_CLIC0_2000000_SIFIVE_NUMINTS
 #define SOFTWARE_INT_ENABLE                             write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), ENABLE);
@@ -89,6 +90,10 @@
 #define TIMER_INT_DISABLE                               write_byte(HART0_CLICINTIE_ADDR(INT_ID_TIMER), DISABLE);
 #define EXTERNAL_INT_ENABLE                             write_byte(HART0_CLICINTIE_ADDR(INT_ID_EXTERNAL), ENABLE);
 #define EXTERNAL_INT_EDISABLE                           write_byte(HART0_CLICINTIE_ADDR(INT_ID_EXTERNAL), DISABLE);
+#define CLIC_SOFTWARE_INT_ENABLE                        write_byte(HART0_CLICINTIE_ADDR(INT_ID_CLIC_SOFTWARE), ENABLE);
+#define CLIC_SOFTWARE_INT_DISABLE                       write_byte(HART0_CLICINTIE_ADDR(INT_ID_CLIC_SOFTWARE), DISABLE);
+#define CLIC_SOFTWARE_INT_SET                           write_byte(HART0_CLICINTIP_ADDR(INT_ID_CLIC_SOFTWARE), ENABLE);
+#define CLIC_SOFTWARE_INT_CLEAR                         write_byte(HART0_CLICINTIP_ADDR(INT_ID_CLIC_SOFTWARE), DISABLE);
 #else
 #error "This design does not have a CLIC...Exiting.\n");
 #endif
@@ -119,6 +124,7 @@ void interrupt_global_disable (void);
 
 /* Globals */
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) clic_software_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc1_handler (void);
@@ -185,6 +191,13 @@ int main() {
     SOFTWARE_INT_ENABLE;
 #endif
 
+    /* clic software interrupt example */
+#if ACTIVATE_CLIC_SOFTWARE_INTERRUPT
+    __mtvt_clic_vector_table[INT_ID_CLIC_SOFTWARE] = (uintptr_t)&clic_software_handler;
+    write_byte(HART0_CLICINTCFG_ADDR(INT_ID_CLIC_SOFTWARE), clicintcfg);
+    CLIC_SOFTWARE_INT_ENABLE;
+#endif
+
     /* timer interrupt example */
 #if ACTIVATE_TIMER_INTERRUPT
     __mtvt_clic_vector_table[INT_ID_TIMER] = (uintptr_t)&timer_handler;
@@ -228,6 +241,11 @@ int main() {
     write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
 #endif
 
+#if ACTIVATE_CLIC_SOFTWARE_INTERRUPT
+    /* Set Software Pending Bit to trigger irq*/
+    CLIC_SOFTWARE_INT_SET;
+#endif
+
     while (1) {
         // go to sleep
         asm volatile ("wfi");
@@ -263,6 +281,15 @@ void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (
     TIMER_INT_DISABLE;
 
     /* Just Do Something when the timer is expired */
+}
+
+/* CLIC Software Interrupt ID #12 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) clic_software_handler (void) {
+
+    /* Clear Software Pending Bit */
+    CLIC_SOFTWARE_INT_CLEAR;
+
+    /* Do Something after clear SW irq pending*/
 }
 
 /* local irq0 */
