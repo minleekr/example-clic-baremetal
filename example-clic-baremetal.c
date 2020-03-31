@@ -3,9 +3,7 @@
 
 /*
  * This example sets up the CPU to service local interrupts using
- * the CLIC mode of operation. SiFive GPIO's are configured as inputs
- * to support a hardware platform like the Arty 100T with buttons
- * that are connected to the local interrupt lines.
+ * the CLIC mode of operation.
  */
 
 #include <stdio.h>
@@ -23,8 +21,7 @@
 /*
  * This test demonstrates how to enable and handle local interrupts,
  * like the software interrupt using Interrupt ID #3, the
- * timer interrupt using Interrupt ID #7, and buttons on the
- * Arty 100T platform, which are typically in the #16-31 range.
+ * timer interrupt using Interrupt ID #7
  *
  * This example uses the CLIC vectored mode of operation, which
  * uses a vector table and is lower latency than CLIC direct mode,
@@ -45,22 +42,13 @@
 #define OUTPUT                  0x101    /* something other than 0 or 1 */
 #define RTC_FREQ                32768
 
-#if __riscv_xlen == 32
 #define MCAUSE_INTR                         0x80000000UL
 #define MCAUSE_CAUSE                        0x000003FFUL
-#else
-#define MCAUSE_INTR                         0x8000000000000000UL
-#define MCAUSE_CAUSE                        0x00000000000003FFUL
-#endif
 #define MCAUSE_CODE(cause)                  (cause & MCAUSE_CAUSE)
 
 /* Compile time options to determine which interrupt modules we have */
-#define CLINT_PRESENT                           (METAL_MAX_CLINT_INTERRUPTS > 0)
 #define CLIC_PRESENT                            (METAL_MAX_CLIC_INTERRUPTS > 0)
 #define PLIC_PRESENT                            (METAL_MAX_PLIC_INTERRUPTS > 0)
-#ifdef METAL_SIFIVE_GPIO0
-#define GPIO_PRESENT                            TRUE
-#endif
 
 /* Interrupt Specific defines - used for mtvec.mode field, which is bit[0] for
  * designs with CLINT, or [1:0] for designs with a CLIC */
@@ -72,13 +60,6 @@
 /* Offsets for multi-core systems */
 #define MSIP_PER_HART_OFFSET                             0x4
 #define MTIMECMP_PER_HART_OFFSET                         0x8
-
-#if CLINT_PRESENT
-#define CLINT_BASE_ADDR                                 METAL_RISCV_CLINT0_0_BASE_ADDRESS
-#define MSIP_BASE_ADDR(hartid)                          (CLINT_BASE_ADDR + METAL_RISCV_CLINT0_MSIP_BASE + (hartid * MSIP_PER_HART_OFFSET))
-#define MTIMECMP_BASE_ADDR(hartid)                      (CLINT_BASE_ADDR + METAL_RISCV_CLINT0_MTIMECMP_BASE + (hartid * MTIMECMP_PER_HART_OFFSET))
-#define MTIME_BASE_ADDR                                 (CLINT_BASE_ADDR + METAL_RISCV_CLINT0_MTIME)
-#endif
 
 #if CLIC_PRESENT
 #define CLIC_BASE_ADDR                                  METAL_SIFIVE_CLIC0_0_BASE_ADDRESS
@@ -97,7 +78,6 @@
 #define INT_ID_SOFTWARE                                 3
 #define INT_ID_TIMER                                    7
 #define INT_ID_EXTERNAL                                 11
-#define MAX_LOCAL_INTS                                  16  /* local interrupts, not local external interrupts */
 #define CLIC_VECTOR_TABLE_SIZE_MAX                      1024
 #define SOFTWARE_INT_ENABLE                             write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), ENABLE);
 #define SOFTWARE_INT_DISABLE                            write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), DISABLE);
@@ -107,7 +87,6 @@
 #define EXTERNAL_INT_EDISABLE                           write_byte(HART0_CLICINTIE_ADDR(INT_ID_EXTERNAL), DISABLE);
 #else
 #error "This design does not have a CLIC...Exiting.\n");
-    exit(0x77);
 #endif
 
 #define NUM_TICKS_ONE_S                         RTC_FREQ            // it takes this many ticks of mtime for 1s to elapse
@@ -118,43 +97,6 @@
 /* Setup prototypes */
 void interrupt_global_enable (void);
 void interrupt_global_disable (void);
-#if CLINT_PRESENT
-/* In CLIC mode of operation, mie CSR is hardwired to 0 */
-void interrupt_software_enable (void);
-void interrupt_software_disable (void);
-void interrupt_timer_enable (void);
-void interrupt_timer_disable (void);
-void interrupt_external_enable (void);
-void interrupt_external_disable (void);
-void interrupt_local_enable (int id);
-void interrupt_local_disable (int id);
-#endif
-void gpio_enable_io (uint32_t pin, uint32_t input_or_output, uint32_t enable_interrupt);
-
-/* GPIO module and offsets - used to configure and enable GPIO as interrupt inputs,
- * for example, like buttons and switches on Arty FPGA board
- */
-#if GPIO_PRESENT
-#define GPIO_BASE_ADDR              METAL_SIFIVE_GPIO0_0_BASE_ADDRESS
-#define GPIO_VALUE_ADDR             (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_VALUE) /* pin value */
-#define GPIO_INPUT_EN_ADDR          (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_INPUT_EN) /* pin input enable */
-#define GPIO_OUTPUT_EN_ADDR         (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_OUTPUT_EN) /* pin output enable */
-#define GPIO_PORT_ADDR              (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_PORT) /* output value */
-#define GPIO_PUE_ADDR               (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_PUE) /* pull up enable */
-#define GPIO_DS_ADDR                (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_DS)  /* drive strength */
-#define GPIO_RISE_IE_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_RISE_IE)
-#define GPIO_RISE_IP_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_RISE_IP)
-#define GPIO_FALL_IE_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_FALL_IE)
-#define GPIO_FALL_IP_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_FALL_IP)
-#define GPIO_HIGH_IE_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_HIGH_IE)
-#define GPIO_HIGH_IP_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_HIGH_IP)
-#define GPIO_LOW_IE_ADDR            (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_LOW_IE)
-#define GPIO_LOW_IP_ADDR            (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_LOW_IP)
-#define GPIO_IOF_EN_ADDR            (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_IOF_EN)
-#define GPIO_IOF_SEL_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_IOF_SEL)
-#define GPIO_OUT_XOR_ADDR           (GPIO_BASE_ADDR + METAL_SIFIVE_GPIO0_IOF_SEL)
-#define MAX_GPIO_PINS               16
-#endif
 
 /* Defines to access CSR registers within C code */
 #define read_csr(reg) ({ unsigned long __tmp; \
@@ -172,32 +114,19 @@ void gpio_enable_io (uint32_t pin, uint32_t input_or_output, uint32_t enable_int
 #define read_byte(addr)                         (*(uint8_t *)(addr))
 
 /* Globals */
-void __attribute__((weak, interrupt)) __mtvec_clint_vector_table(void);
 void __attribute__((weak, interrupt)) software_handler (void);
 void __attribute__((weak, interrupt)) timer_handler (void);
 void __attribute__((weak, interrupt)) external_handler (void);
-void __attribute__((weak, interrupt)) button_handler (void);
-void __attribute__((weak, interrupt)) default_vector_handler (void);
 void __attribute__((weak)) default_exception_handler(void);
 
 __attribute__((aligned(64))) uintptr_t __mtvt_clic_vector_table[CLIC_VECTOR_TABLE_SIZE_MAX];
-uint32_t plic_interrupt_lines[METAL_MAX_GLOBAL_EXT_INTERRUPTS];
-uint32_t clic_interrupt_lines[METAL_MAX_CLIC_INTERRUPTS + METAL_MAX_LOCAL_EXT_INTERRUPTS];
-uint32_t gpio_interrupt_lines[METAL_MAX_GPIO_INTERRUPTS];
-uint32_t timer_isr_counter = 0;
-uint32_t button_isr_counter = 0;
 
 /* Main - Setup CLIC interrupt handling and describe how to trigger interrupt */
 int main() {
 
     uint32_t i, mode = MTVEC_MODE_CLIC_VECTORED;
     uintptr_t mtvec_base, mtvt_base;
-    int button_num;
     uint8_t cliccfg, clicintcfg;
-    struct metal_gpio *ggpio;
-
-    /* Intro message */
-    printf ("Running CLIC Example...\n\n");
 
     /* Write mstatus.mie = 0 to disable all machine interrupts prior to setup */
     interrupt_global_disable();
@@ -205,43 +134,12 @@ int main() {
     /* Setup mtvec to point to our exception handler table using mtvec.base,
      * and assign mtvec.mode = 3 for CLIC vectored mode of operation. The
      * mtvec.mode field is bit[0] for designs with CLINT, or [1:0] using CLIC */
-    mtvec_base = (uintptr_t)&__mtvec_clint_vector_table;
+    mtvec_base = (uintptr_t)&default_exception_handler;
     write_csr (mtvec, (mtvec_base | mode));
 
     /* Setup mtvt which is CLIC specific, to hold base address for interrupt handlers */
     mtvt_base = (uintptr_t)&__mtvt_clic_vector_table;
     write_csr (0x307, (mtvt_base));  /* 0x307 is CLIC CSR number */
-
-#if GPIO_PRESENT
-
-    /* Here we enable Arty Buttons which are GPIOs to fire interrupt lines */
-#if __MEE_DT_MAX_GPIOS > 1
-#error "Make sure to select the proper GPIO module for this demo!"
-#else
-    ggpio = metal_gpio_get_device(0); /* assume only a single GPIO0 module exists */
-    if (ggpio == NULL) {
-        printf ("GPIO device returned an error - check setup.  Exiting\n");
-        exit (0xF5);
-    }
-#endif
-
-    /* Enable each standard Arty GPIO button as input with interrupt enabled
-     * see __metal_driver_sifive_gpio_button_pin() for reference.  The
-     * standard cores use GPIO 4-7 for this.
-     */
-    gpio_enable_io(4, INPUT, ENABLE);
-    gpio_enable_io(5, INPUT, ENABLE);
-    gpio_enable_io(6, INPUT, ENABLE);
-    gpio_enable_io(7, INPUT, ENABLE);
-
-    /* Get the list of interrupt lines we have connected on our design */
-    for (i = 0; i < METAL_MAX_GPIO_INTERRUPTS; i++) {
-
-        /* Get the actual interrupt line number and populate our array */
-        gpio_interrupt_lines[i] = __metal_driver_sifive_gpio0_interrupt_lines(ggpio, i);
-    }
-
-#endif  // #if GPIO_PRESENT
 
 #if CLIC_PRESENT
 
@@ -272,96 +170,23 @@ int main() {
     EXTERNAL_INT_ENABLE;
 
     /* Get numeric list of CLIC local external interrupt lines and enable those at the CPU */
-    for (i = 0; i < METAL_MAX_LOCAL_EXT_INTERRUPTS; i++) {
-
-        clic_interrupt_lines[i] = __metal_driver_sifive_local_external_interrupts0_interrupt_lines(NULL, i);
-
         /* In CLIC modes, mie is hardwired to 0, so we use clicinten[] here to enable */
-        write_byte(HART0_CLICINTIE_ADDR(clic_interrupt_lines[i]), ENABLE);
 
         /* Since NLBITS = 0, CLICINTCFG register holds only priorities for each interrupt */
-        write_byte(HART0_CLICINTCFG_ADDR(clic_interrupt_lines[i]), clicintcfg);
 
         /* default all interrupt lines to the button handler as an example on how to setup vector table */
-        __mtvt_clic_vector_table[clic_interrupt_lines[i]] = (uintptr_t)&button_handler;
-    }
-
-#else
-#error "This design does not have a CLIC...Exiting.\n");
-    exit(0x77);
 #endif
 
     /* setup next timer interrupt interval */
-    SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
+    //SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
 
     /* Write mstatus.mie = 1 to enable all machine interrupts */
     interrupt_global_enable();
 
-    /* Allow timer interrupt to fire before we continue, running at ~5s intervals */
-    printf ("Waiting for 5s Timer interrupt to fire...\n");
-    while (!timer_isr_counter);
-    TIMER_INT_DISABLE;
-
     /* write msip and display message that s/w handler was hit */
-    fflush(stdout);
-    printf ("\nSetting software interrupt...\n");
-    write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
+    //write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
 
-    /* Tell user to push a button to demonstrate gpio line assertion */
-    printf ("Waiting for any 4 button presses...\n\n");
-    fflush(stdout);
-    while (button_isr_counter < 4){};
-
-    printf ("Thanks!  Now exiting...\n");
-
-    exit (0);
-}
-
-/* Enable or disable a GPIO for input or output */
-void gpio_enable_io(uint32_t pin, uint32_t input_or_output, uint32_t enable_interrupt) {
-
-    uint32_t io_bit, gpio_in, gpio_out;
-
-    if (pin > MAX_GPIO_PINS) {
-        return;
-    }
-    else {
-        io_bit = (1 << pin);
-    }
-
-    /* read current input & output enable values */
-    gpio_in = read_word(GPIO_INPUT_EN_ADDR);
-    gpio_out = read_word(GPIO_OUTPUT_EN_ADDR);
-
-    /* Setup I/O */
-    if (input_or_output == INPUT) {
-
-        /* Disable output, enable input */
-        write_word(GPIO_OUTPUT_EN_ADDR, (gpio_out & ~io_bit));
-        write_word(GPIO_INPUT_EN_ADDR, (gpio_in | io_bit));
-
-    } else if (input_or_output == OUTPUT) {
-
-        /* Disable input, enable output */
-        write_word(GPIO_INPUT_EN_ADDR, (gpio_in & ~io_bit));
-        write_word(GPIO_OUTPUT_EN_ADDR, (gpio_out | io_bit));
-
-    } else if (input_or_output == DISABLE) {
-
-        /* Turn off both input and output */
-        write_word(GPIO_INPUT_EN_ADDR, (gpio_in & ~io_bit));
-        write_word(GPIO_OUTPUT_EN_ADDR, (gpio_out & ~io_bit));
-    }
-
-    /* Enable Interrupts, which are level-high sensitive */
-    if (enable_interrupt == ENABLE) {
-        /* Enable interrupt */
-        write_word(GPIO_HIGH_IE_ADDR, ENABLE);
-    }
-    else {
-        /* Disable Interrupt */
-        write_word(GPIO_HIGH_IE_ADDR, DISABLE);
-    }
+    return 0;
 }
 
 /* External Interrupt ID #11 - handles all global interrupts */
@@ -376,48 +201,14 @@ void __attribute__((weak, interrupt)) external_handler (void) {
 
 void __attribute__((weak, interrupt)) software_handler (void) {
 
-    uintptr_t mip, code = MCAUSE_CODE(read_csr(mcause));
-    uint8_t int_bit = read_byte(HART0_CLICINTIP_ADDR(code));
-
-    printf ("Software Handler!  Interrupt ID: %d\n", code);
-
     /* Clear Software Pending Bit which clears pending bit */
     write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x0);
-
-    if (read_byte(HART0_CLICINTIP_ADDR(code))) {
-        printf ("Software pending bit still high!\n");
-    }
 }
 
 void __attribute__((weak, interrupt)) timer_handler (void) {
 
-    uintptr_t code = MCAUSE_CODE(read_csr(mcause));
-    uintptr_t mtime, mip;
-    uint8_t int_bit = read_byte(HART0_CLICINTIP_ADDR(code));
-
-    printf ("Timer Handler! Interrupt ID: %d, Count: %d\n", code, ++timer_isr_counter);
-
     /* set our next interval */
-    SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
-}
-
-void __attribute__((weak, interrupt)) button_handler (void) {
-
-    uintptr_t mip, code = MCAUSE_CODE(read_csr(mcause));
-    uint8_t int_bit = read_byte(HART0_CLICINTIP_ADDR(code));
-
-    printf ("Button Handler! Interrupt ID: %d\n", code);
-
-    /* wait for user to release button */
-    while (read_byte(HART0_CLICINTIP_ADDR(code)));
-
-    /* increment counter */
-    button_isr_counter++;
-}
-
-void __attribute__((weak, interrupt)) default_vector_handler (void) {
-    /* Add functionality if desired */
-    while (1);
+    //SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
 }
 
 void __attribute__((weak)) default_exception_handler(void) {
@@ -428,12 +219,7 @@ void __attribute__((weak)) default_exception_handler(void) {
     uintptr_t mtval = read_csr(mtval);
     uintptr_t code = MCAUSE_CODE(mcause);
 
-    printf ("Exception Hit! mcause: 0x%08x, mepc: 0x%08x, mtval: 0x%08x\n", mcause, mepc, mtval);
-    printf ("Mcause Exception Code: 0x%08x\n", code);
-    printf("Now Exiting...\n");
-
-    /* Exit here using non-zero return code */
-    exit (0xEE);
+    while (1);
 }
 
 void interrupt_global_enable (void) {
@@ -445,46 +231,3 @@ void interrupt_global_disable (void) {
     uintptr_t m;
     __asm__ volatile ("csrrc %0, mstatus, %1" : "=r"(m) : "r"(METAL_MIE_INTERRUPT));
 }
-#if CLINT_PRESENT
-void interrupt_software_enable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrs %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_SW));
-}
-
-void interrupt_software_disable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrc %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_SW));
-}
-
-void interrupt_timer_enable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrs %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_TMR));
-}
-
-void interrupt_timer_disable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrc %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_TMR));
-}
-
-void interrupt_external_enable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrs %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_EXT));
-}
-
-void interrupt_external_disable (void) {
-    unsigned long m;
-    __asm__ volatile ("csrrc %0, mie, %1" : "=r"(m) : "r"(METAL_LOCAL_INTERRUPT_EXT));
-}
-
-void interrupt_local_enable (int id) {
-    uintptr_t b = 1 << id;
-    uintptr_t m;
-    __asm__ volatile ("csrrs %0, mie, %1" : "=r"(m) : "r"(b));
-}
-
-void interrupt_local_disable (int id) {
-    uintptr_t b = 1 << id;
-    uintptr_t m;
-    __asm__ volatile ("csrrc %0, mie, %1" : "=r"(m) : "r"(b));
-}
-#endif
