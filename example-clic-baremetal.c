@@ -160,7 +160,7 @@ int main() {
 
 #if CLIC_PRESENT
 
-    /* Setup Levels and priorities in CLICCFG global register
+    /* Setup CLICCFG
      * Turn off Selective vectoring (NVBITS = 0)
      * Select a single preemption level of 255 (NLBITS = 0)
      * Machine mode interrupts only (NMBITS = 0)
@@ -168,11 +168,13 @@ int main() {
     cliccfg = (CLICCFG_NVBITS(0) | CLICCFG_NLBITS(0) | CLICCFG_NMBITS(0));
     write_byte(HART0_CLICCFG_ADDR, cliccfg);
 
-    /* Use 0x3 as a default priority for all interrupts */
-    clicintcfg = 0x3;
-    /* If you want to use Nested Interrupt, you should set Interrupt Levels and Priorities.
-     * cliccfg.NLBITS is the number of Level bits available.
-     * Level value is masked by cliccfg.NLBITS. The remaining bits are for Priority.
+    /* The core has a total of METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS bits in clicintcfg
+     *  which specify how to encode a given interrupts pre-emption level and/or priority.
+     *  The actual number of bits which determine the preemption level is determined by
+     *  cliccfg.NLBITS. If cliccfg.NLBITS is < METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS,
+     *  then the remaining least significant implemented bits are used to encode priorities
+     *  within a given pre-emption level.
+     *
      * #NLBITS encoding  interrupt levels
      *   1     l.......                        127,                            255
      *   2     ll......           63,          127,            191,            255
@@ -180,9 +182,28 @@ int main() {
      *   4     llll....  15,31,47,63,79,95,111,127,143,159,175,191,207,223,239,255
      */
 
-    /* Enable CLIC local interrupt lines 3, 7, 11 for software, timer, and external,
-     * and setup handlers in the vector table.
+    /* If cliccfg.NLBITS is set to zero, then all interrupts are treated as level 255 and
+     *  all METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS bits are used to set priorities.
+     *  In case there are multiple pending-and-enabled interrupts at the same highest priority,
+     *  the highest-numbered interrupt ID is taken first
+     *  e.g) available priorities at METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS = 2
+     *
+     * #NLBITS encoding  interrupt level = 255, belows are available priorities
+     *   0     pp......           63,          127,            191,            255
      */
+    clicintcfg = 255;
+
+#if ACTIVATE_NESTED_INTERRUPT
+    /* cliccfg.NLBITS needs to be set for the nested interrupt
+     *  e.g) avaliable levels at METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS = 2
+     *
+     * #NLBITS encoding  interrupt levels
+     *   0     ll......           63,          127,            191,            255
+     */
+    cliccfg = read_byte(HART0_CLICCFG_ADDR);
+    cliccfg |= CLICCFG_NLBITS(METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTBITS);
+    write_byte(HART0_CLICCFG_ADDR, cliccfg);
+#endif
 
     /* software interrupt example */
 #if ACTIVATE_SOFTWARE_INTERRUPT
