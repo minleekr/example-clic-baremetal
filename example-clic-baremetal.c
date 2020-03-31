@@ -195,10 +195,12 @@ int main() {
     TIMER_INT_ENABLE;
 #endif
 
-    /* If you want no use the external interrupt, please comment out it */
+    /* external interrupt example */
+#if ACTIVATE_EXTERNAL_INTERRUPT
     __mtvt_clic_vector_table[INT_ID_EXTERNAL] = (uintptr_t)&external_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_EXTERNAL), clicintcfg);
     EXTERNAL_INT_ENABLE;
+#endif
 
     /* If you want no use CLIC local external interrupt, please comment out it */
     /* Get numeric list of CLIC local external interrupt lines and enable those at the CPU */
