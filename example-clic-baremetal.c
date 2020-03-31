@@ -178,10 +178,12 @@ int main() {
      * and setup handlers in the vector table.
      */
 
-    /* If you want no use the software interrupt, please comment out it */
+    /* software interrupt example */
+#if ACTIVATE_SOFTWARE_INTERRUPT
     __mtvt_clic_vector_table[INT_ID_SOFTWARE] = (uintptr_t)&software_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_SOFTWARE), clicintcfg);
     SOFTWARE_INT_ENABLE;
+#endif
 
     /* timer interrupt example */
 #if ACTIVATE_TIMER_INTERRUPT
@@ -219,9 +221,10 @@ int main() {
     /* Write mstatus.mie = 1 to enable all machine interrupts */
     interrupt_global_enable();
 
-    /* If you want to trigger the software interrupt, please uncomment out it */
-    /* write msip and display message that s/w handler was hit */
-    //write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
+#if ACTIVATE_SOFTWARE_INTERRUPT
+    /* Set Software Pending Bit to trigger irq*/
+    write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
+#endif
 
     while (1) {
         // go to sleep
@@ -245,7 +248,7 @@ void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) external_handle
 /* Software Interrupt ID #3 */
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handler (void) {
 
-    /* Clear Software Pending Bit which clears mip.msip bit */
+    /* Clear Software Pending Bit */
     write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x0);
 
     /* Do Something after clear SW irq pending*/
