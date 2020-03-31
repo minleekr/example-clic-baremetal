@@ -3,7 +3,9 @@
 
 /*
  * This example sets up the CPU to service local interrupts using
- * the CLIC mode of operation.
+ * the CLIC mode of operation. SiFive GPIO's are configured as inputs
+ * to support a hardware platform like the Arty 100T with buttons
+ * that are connected to the local interrupt lines.
  */
 
 #include <stdio.h>
@@ -21,7 +23,8 @@
 /*
  * This test demonstrates how to enable and handle local interrupts,
  * like the software interrupt using Interrupt ID #3, the
- * timer interrupt using Interrupt ID #7
+ * timer interrupt using Interrupt ID #7, and buttons on the
+ * Arty 100T platform, which are typically in the #16-31 range.
  *
  * This example uses the CLIC vectored mode of operation, which
  * uses a vector table and is lower latency than CLIC direct mode,
@@ -31,7 +34,7 @@
  * interrupts and exceptions trap to mtvec.base address and software
  * is responsible for dispatching interrupts based on the contents
  * in the mcause CSR.  CLIC direct mode of operation is not supported
- * in this example.  
+ * in this example.
  */
 
 #define DISABLE                 0
@@ -78,6 +81,7 @@
 #define INT_ID_SOFTWARE                                 3
 #define INT_ID_TIMER                                    7
 #define INT_ID_EXTERNAL                                 11
+#define MAX_LOCAL_INTS                                  16  /* local interrupts, not local external interrupts */
 #define CLIC_VECTOR_TABLE_SIZE_MAX                      1024
 #define SOFTWARE_INT_ENABLE                             write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), ENABLE);
 #define SOFTWARE_INT_DISABLE                            write_byte(HART0_CLICINTIE_ADDR(INT_ID_SOFTWARE), DISABLE);
@@ -114,10 +118,12 @@ void interrupt_global_disable (void);
 #define read_byte(addr)                         (*(uint8_t *)(addr))
 
 /* Globals */
-void __attribute__((weak, interrupt)) software_handler (void);
-void __attribute__((weak, interrupt)) timer_handler (void);
-void __attribute__((weak, interrupt)) external_handler (void);
-void __attribute__((weak)) default_exception_handler(void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc1_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) external_handler (void);
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"), aligned(64))) default_exception_handler(void);
 
 __attribute__((aligned(64))) uintptr_t __mtvt_clic_vector_table[CLIC_VECTOR_TABLE_SIZE_MAX];
 
@@ -141,6 +147,7 @@ int main() {
     mtvt_base = (uintptr_t)&__mtvt_clic_vector_table;
     write_csr (0x307, (mtvt_base));  /* 0x307 is CLIC CSR number */
 
+
 #if CLIC_PRESENT
 
     /* Setup Levels and priorities in CLICCFG global register
@@ -153,44 +160,75 @@ int main() {
 
     /* Use 0x3 as a default priority for all interrupts */
     clicintcfg = 0x3;
+    /* If you want to use Nested Interrupt, you should set Interrupt Levels and Priorities.
+     * cliccfg.NLBITS is the number of Level bits available.
+     * Level value is masked by cliccfg.NLBITS. The remaining bits are for Priority.
+     * #NLBITS encoding  interrupt levels
+     *   1     l.......                        127,                            255
+     *   2     ll......           63,          127,            191,            255
+     *   3     lll.....     31,   63,   95,    127,    159,    191,    223,    255
+     *   4     llll....  15,31,47,63,79,95,111,127,143,159,175,191,207,223,239,255
+     */
 
     /* Enable CLIC local interrupt lines 3, 7, 11 for software, timer, and external,
      * and setup handlers in the vector table.
      */
+
+    /* If you want no use the software interrupt, please comment out it */
     __mtvt_clic_vector_table[INT_ID_SOFTWARE] = (uintptr_t)&software_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_SOFTWARE), clicintcfg);
     SOFTWARE_INT_ENABLE;
 
+    /* If you want no use the cpu timer interrupt, please comment out it */
     __mtvt_clic_vector_table[INT_ID_TIMER] = (uintptr_t)&timer_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_TIMER), clicintcfg);
     TIMER_INT_ENABLE;
 
+    /* If you want no use the external interrupt, please comment out it */
     __mtvt_clic_vector_table[INT_ID_EXTERNAL] = (uintptr_t)&external_handler;
     write_byte(HART0_CLICINTCFG_ADDR(INT_ID_EXTERNAL), clicintcfg);
     EXTERNAL_INT_ENABLE;
 
+    /* If you want no use CLIC local external interrupt, please comment out it */
     /* Get numeric list of CLIC local external interrupt lines and enable those at the CPU */
-        /* In CLIC modes, mie is hardwired to 0, so we use clicinten[] here to enable */
+    /* In CLIC modes, mie is hardwired to 0, so we use clicinten[] here to enable */
+    i = 16; /* local irq 0 */
+    /* Sample code by required local interrupt number */
+    //i = 17 /* local irq 1 */
+    //i = 32 /* local irq 16 */
+    //i = 47 /* local irq 31 */
+    write_byte(HART0_CLICINTIE_ADDR(i), ENABLE);
 
-        /* Since NLBITS = 0, CLICINTCFG register holds only priorities for each interrupt */
+    /* Since NLBITS = 0, CLICINTCFG register holds only priorities for each interrupt */
+    write_byte(HART0_CLICINTCFG_ADDR(i), clicintcfg);
 
-        /* default all interrupt lines to the button handler as an example on how to setup vector table */
+    /* default all interrupt lines to the button handler as an example on how to setup vector table */
+    __mtvt_clic_vector_table[i] = (uintptr_t)&lc0_handler;
+
 #endif
 
+    /* If you want to set the interval of timer interrupt, please uncomment it */
     /* setup next timer interrupt interval */
     //SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
 
     /* Write mstatus.mie = 1 to enable all machine interrupts */
     interrupt_global_enable();
 
+    /* If you want to trigger the software interrupt, please uncomment out it */
     /* write msip and display message that s/w handler was hit */
     //write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x1);
 
+    while (1) {
+        // go to sleep
+        asm volatile ("wfi");
+    }
+
+    // just for compile, but it should not return!!
     return 0;
 }
 
 /* External Interrupt ID #11 - handles all global interrupts */
-void __attribute__((weak, interrupt)) external_handler (void) {
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) external_handler (void) {
 
     /* The external interrupt is usually used for a PLIC, which handles global
      * interrupt dispatching.  If no PLIC is connected, then custom IP can connect
@@ -199,19 +237,217 @@ void __attribute__((weak, interrupt)) external_handler (void) {
      */
 }
 
-void __attribute__((weak, interrupt)) software_handler (void) {
+/* Software Interrupt ID #3 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handler (void) {
 
-    /* Clear Software Pending Bit which clears pending bit */
+    /* Clear Software Pending Bit which clears mip.msip bit */
     write_word(MSIP_BASE_ADDR(read_csr(mhartid)), 0x0);
+
+    /* Do Something after clear SW irq pending*/
 }
 
-void __attribute__((weak, interrupt)) timer_handler (void) {
+/* Timer Interrupt ID #7 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (void) {
+    /* Just Do Something when the timer is expired*/
 
-    /* set our next interval */
-    //SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
+	/* If you want to set the interval of timer interrupt, please uncomment it */
+	/* set our next interval */
+	//SET_TIMER_INTERVAL_MS(DEMO_TIMER_INTERVAL);
 }
 
-void __attribute__((weak)) default_exception_handler(void) {
+/* local irq0 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq1 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc1_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq2 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc2_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq3 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc3_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq4 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc4_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq5 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc5_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq6 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc6_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq7 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc7_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq8 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc8_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq9 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc9_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq10 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc10_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq11 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc11_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq12 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc12_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq13 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc13_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq14 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc14_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq15 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc15_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq16 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc16_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq17 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc17_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq18 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc18_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq19 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc19_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq20 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc20_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq21 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc21_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq22 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc22_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq23 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc23_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq24 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc24_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq25 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc25_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq26 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc26_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq27 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc27_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq28 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc28_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq29 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc29_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq30 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc30_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+/* local irq31 */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc31_handler (void) {
+    /* Add functionality if desired */
+
+}
+
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"), aligned(64))) default_exception_handler(void) {
 
     /* Read mcause to understand the exception type */
     uintptr_t mcause = read_csr(mcause);
