@@ -123,7 +123,7 @@ void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc1_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) external_handler (void);
-void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"), aligned(64))) default_exception_handler(void);
+void __attribute__((weak, interrupt, aligned(64))) default_exception_handler(void);
 
 __attribute__((aligned(64))) uintptr_t __mtvt_clic_vector_table[CLIC_VECTOR_TABLE_SIZE_MAX];
 
@@ -147,6 +147,10 @@ int main() {
     mtvt_base = (uintptr_t)&__mtvt_clic_vector_table;
     write_csr (0x307, (mtvt_base));  /* 0x307 is CLIC CSR number */
 
+    for (int i = 0; i < CLIC_VECTOR_TABLE_SIZE_MAX; i++)
+    {
+        __mtvt_clic_vector_table[i] = (uintptr_t)&default_exception_handler;
+    }
 
 #if CLIC_PRESENT
 
@@ -447,7 +451,7 @@ void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc31_handler (v
 
 }
 
-void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"), aligned(64))) default_exception_handler(void) {
+void __attribute__((weak, aligned(64))) default_exception_handler(void) {
 
     /* Read mcause to understand the exception type */
     uintptr_t mcause = read_csr(mcause);
