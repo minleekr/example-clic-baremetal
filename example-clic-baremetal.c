@@ -134,7 +134,13 @@ __attribute__((aligned(64))) uintptr_t __mtvt_clic_vector_table[CLIC_VECTOR_TABL
 /* user interrupt handler */
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
 
-#define ACTIVATE_LOCAL_EXT_INTERRUPT    1
+/* you can activate what you want to test */
+#define ACTIVATE_SOFTWARE_INTERRUPT         0
+#define ACTIVATE_CLIC_SOFTWARE_INTERRUPT    0
+#define ACTIVATE_TIMER_INTERRUPT            0
+#define ACTIVATE_EXTERNAL_INTERRUPT         0
+#define ACTIVATE_NESTED_INTERRUPT           0
+#define ACTIVATE_LOCAL_EXT_INTERRUPT        1
 
 /* Main - Setup CLIC interrupt handling and describe how to trigger interrupt */
 int main() {
