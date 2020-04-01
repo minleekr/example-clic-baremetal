@@ -103,9 +103,15 @@
 #define DEMO_TIMER_INTERVAL                     5000                // 5s timer interval
 #define SET_TIMER_INTERVAL_MS(ms_ticks)         write_dword(MTIMECMP_BASE_ADDR(read_csr(mhartid)), (read_dword(MTIME_BASE_ADDR) + (ms_ticks * NUM_TICKS_ONE_MS)))
 
-/* Setup prototypes */
-void interrupt_global_enable (void);
-void interrupt_global_disable (void);
+inline __attribute__((always_inline)) void interrupt_global_enable (void) {
+    uintptr_t m;
+    __asm__ volatile ("csrrs %0, mstatus, %1" : "=r"(m) : "r"(METAL_MIE_INTERRUPT));
+}
+
+inline __attribute__((always_inline)) void interrupt_global_disable (void) {
+    uintptr_t m;
+    __asm__ volatile ("csrrc %0, mstatus, %1" : "=r"(m) : "r"(METAL_MIE_INTERRUPT));
+}
 
 /* Defines to access CSR registers within C code */
 #define read_csr(reg) ({ unsigned long __tmp; \
@@ -530,14 +536,4 @@ void __attribute__((weak, aligned(64))) default_exception_handler(void) {
     uintptr_t code = MCAUSE_CODE(mcause);
 
     while (1);
-}
-
-void interrupt_global_enable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrs %0, mstatus, %1" : "=r"(m) : "r"(METAL_MIE_INTERRUPT));
-}
-
-void interrupt_global_disable (void) {
-    uintptr_t m;
-    __asm__ volatile ("csrrc %0, mstatus, %1" : "=r"(m) : "r"(METAL_MIE_INTERRUPT));
 }
