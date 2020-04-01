@@ -126,12 +126,15 @@ void interrupt_global_disable (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) software_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) clic_software_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) timer_handler (void);
-void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
-void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc1_handler (void);
 void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) external_handler (void);
 void __attribute__((weak, interrupt, aligned(64))) default_exception_handler(void);
 
 __attribute__((aligned(64))) uintptr_t __mtvt_clic_vector_table[CLIC_VECTOR_TABLE_SIZE_MAX];
+
+/* user interrupt handler */
+void __attribute__((weak, interrupt("SiFive-CLIC-preemptible"))) lc0_handler (void);
+
+#define ACTIVATE_LOCAL_EXT_INTERRUPT    1
 
 /* Main - Setup CLIC interrupt handling and describe how to trigger interrupt */
 int main() {
@@ -157,8 +160,6 @@ int main() {
     {
         __mtvt_clic_vector_table[i] = (uintptr_t)&default_exception_handler;
     }
-
-#if CLIC_PRESENT
 
     /* Setup CLICCFG
      * Turn off Selective vectoring (NVBITS = 0)
@@ -236,22 +237,31 @@ int main() {
     EXTERNAL_INT_ENABLE;
 #endif
 
-    /* If you want no use CLIC local external interrupt, please comment out it */
-    /* Get numeric list of CLIC local external interrupt lines and enable those at the CPU */
-    /* In CLIC modes, mie is hardwired to 0, so we use clicinten[] here to enable */
-    i = 16; /* local irq 0 */
-    /* Sample code by required local interrupt number */
-    //i = 17 /* local irq 1 */
-    //i = 32 /* local irq 16 */
-    //i = 47 /* local irq 31 */
+#if ACTIVATE_LOCAL_EXT_INTERRUPT
+    /* how to set clic local external interrupt
+     *  1. select irq number (16 ~ (METAL_SIFIVE_CLIC0_0_SIFIVE_NUMINTS-1))
+     *  2. set level(including priority) of irq on clicintcfg
+     *  3. register irq handler
+     *  4. enable irq
+     * /
+
+    /* local_ext_irq0 */
+    i = 16;
+    /* configure level/priority*/
+    write_byte(HART0_CLICINTCFG_ADDR(i), 255);
+    /* register the irq handler */
+    __mtvt_clic_vector_table[i] = (uintptr_t)&lc0_handler;
+    /* enable local_ext_irq0 */
     write_byte(HART0_CLICINTIE_ADDR(i), ENABLE);
 
-    /* Since NLBITS = 0, CLICINTCFG register holds only priorities for each interrupt */
-    write_byte(HART0_CLICINTCFG_ADDR(i), clicintcfg);
+    /* local_ext_irq1 */
+    //i = 17;
 
-    /* default all interrupt lines to the button handler as an example on how to setup vector table */
-    __mtvt_clic_vector_table[i] = (uintptr_t)&lc0_handler;
+    /* local_ext_irq16 */
+    //i = 32;
 
+    /* local_ext_irq31 */
+    //i = 47;
 #endif
 
     /* Write mstatus.mie = 1 to enable all machine interrupts */
